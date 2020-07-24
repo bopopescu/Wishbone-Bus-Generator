@@ -57,7 +57,7 @@ class wb_settings(object):
         self.data_width = data_width
         self.address_width = address_width
         
-class wb_master(object):
+class wb_main(object):
     def __init__(self, name, address_width, include_address_valid = False):
         self.name = name
         self.address_width = address_width
@@ -65,7 +65,7 @@ class wb_master(object):
     def __str__(self):
         return self.name
         
-class wb_slave(object):
+class wb_subordinate(object):
     def __init__(self, name, base, size):
         self.name = name
         self.base = base
@@ -75,11 +75,11 @@ class wb_slave(object):
         return self.name
 
 class wb_bus(object):
-    def __init__(self,name, settings = None,masters = [], slaves = []):
+    def __init__(self,name, settings = None,mains = [], subordinates = []):
         self.name = name
         self.settings = settings
-        self.masters = masters
-        self.slaves = slaves
+        self.mains = mains
+        self.subordinates = subordinates
     def __str__(self):
         return self.name
            
@@ -136,75 +136,75 @@ class wb_builder(object):
         self.config.settings = wb_settings(settings['data_width'],
                                              -1)
     
-    def load_master(self, master):  
-        self.verify_field(master, 'name', TYPE_STRING)
-        self.verify_field(master, 'address_width', TYPE_INT)
-        self.verify_field(master, 'include_address_valid',TYPE_BOOL, False)
-        self.config.masters.append(wb_master(master['name'],
-                                             master['address_width'],
-                                             master['include_address_valid'] ))
+    def load_main(self, main):  
+        self.verify_field(main, 'name', TYPE_STRING)
+        self.verify_field(main, 'address_width', TYPE_INT)
+        self.verify_field(main, 'include_address_valid',TYPE_BOOL, False)
+        self.config.mains.append(wb_main(main['name'],
+                                             main['address_width'],
+                                             main['include_address_valid'] ))
           
-    def load_masters(self, masters):
-        if len(masters) < 1:
-            self.infile_error("At least one master must be defined")
-        if len(masters) > 1:
-            self.infile_error("Only one master is currently supported")
+    def load_mains(self, mains):
+        if len(mains) < 1:
+            self.infile_error("At least one main must be defined")
+        if len(mains) > 1:
+            self.infile_error("Only one main is currently supported")
             
         count = 0;
         addr_width = -1    
-        for master in masters:
-            self.verify_type(master,TYPE_MAP,"Master %d"%count)
-            self.load_master(master)
+        for main in mains:
+            self.verify_type(main,TYPE_MAP,"Main %d"%count)
+            self.load_main(main)
             count += 1
             
-        for master in self.config.masters:
-            if master.address_width != addr_width and addr_width != -1:
-                self.infile_error("All master address bus widths must match")
-            addr_width = master.address_width
+        for main in self.config.mains:
+            if main.address_width != addr_width and addr_width != -1:
+                self.infile_error("All main address bus widths must match")
+            addr_width = main.address_width
             
         self.config.settings.address_width = addr_width
 
-    def load_slave(self, slave):
+    def load_subordinate(self, subordinate):
         KW_AUTO = 'auto'
-        self.verify_field(slave, 'name', TYPE_STRING)
-        self.verify_field(slave, 'base', ("Integer or 'auto'",None,
+        self.verify_field(subordinate, 'name', TYPE_STRING)
+        self.verify_field(subordinate, 'base', ("Integer or 'auto'",None,
                                           lambda x: isinstance(x,int) or x == KW_AUTO))
-        if(slave['base'] ==KW_AUTO):
+        if(subordinate['base'] ==KW_AUTO):
             max = 0
-            for s in self.config.slaves:
+            for s in self.config.subordinates:
                 next = s.base + s.size
                 if(next > max):
                     max = next
-            slave['base'] = max;
+            subordinate['base'] = max;
             
-        self.verify_field(slave, 'size', TYPE_INT)   
-        size = slave['size']
-        base = slave['base']
+        self.verify_field(subordinate, 'size', TYPE_INT)   
+        size = subordinate['size']
+        base = subordinate['base']
             
         if (size & (size-1)) != 0:
-            self.infile_error("Slave %s's size is not a power of 2"%slave['name'])
+            self.infile_error("Subordinate %s's size is not a power of 2"%subordinate['name'])
         if (base & ~(size-1)) != base: 
-            self.infile_error("Slave %s is not size-aligned"%slave['name'])
+            self.infile_error("Subordinate %s is not size-aligned"%subordinate['name'])
             
-        self.config.slaves.append( wb_slave(
-                    slave['name'], base, size))
+        self.config.subordinates.append( wb_subordinate(
+                    subordinate['name'], base, size))
         
-    def load_slaves(self, slaves):      
-        if len(slaves) < 1:
-            self.infile_error("At least one slave must be defined")
+    def load_subordinates(self, subordinates):      
+        if len(subordinates) < 1:
+            self.infile_error("At least one subordinate must be defined")
      
         count = 0;
-        for slave in slaves:
-            self.verify_type(slave, TYPE_MAP, "Slave %d"%count)
-            self.load_slave(slave)
+        for subordinate in subordinates:
+            self.verify_type(subordinate, TYPE_MAP, "Subordinate %d"%count)
+            self.load_subordinate(subordinate)
             count += 1
-        for slavea in self.config.slaves:
-            for slaveb in self.config.slaves:
-                if not (slavea.base < slaveb.base or \
-                    slavea.base >= slaveb.base + slaveb.size) \
-                    and slavea != slaveb:
-                    self.infile_error("Slaves '%s' and '%s' overlap"%
-                                      (slavea,slaveb))
+        for subordinatea in self.config.subordinates:
+            for subordinateb in self.config.subordinates:
+                if not (subordinatea.base < subordinateb.base or \
+                    subordinatea.base >= subordinateb.base + subordinateb.size) \
+                    and subordinatea != subordinateb:
+                    self.infile_error("Subordinates '%s' and '%s' overlap"%
+                                      (subordinatea,subordinateb))
                     
     def load_config(self,jsonconfig):
         self.verify_type(jsonconfig, TYPE_MAP, "The config root")
@@ -214,8 +214,8 @@ class wb_builder(object):
         self.config = wb_bus(str(jsonconfig['name']))
         
         for sect in(('settings',TYPE_MAP,self.load_settings),
-                       ('masters',TYPE_LIST,self.load_masters),
-                       ('slaves',TYPE_LIST, self.load_slaves)):
+                       ('mains',TYPE_LIST,self.load_mains),
+                       ('subordinates',TYPE_LIST, self.load_subordinates)):
             self.verify_field(jsonconfig,sect[0],sect[1] )
             sect[2](jsonconfig[sect[0]])
 
@@ -226,72 +226,72 @@ class wb_builder(object):
         self.add_line('// *** DO NOT MODIFY THIS FILE ')
         self.add_line('// *** GENERATED FROM:')
         self.add_line('// *** %s'%self.infile.name)
-        self.add_line('// %d master, %d slave %s wishbone interconnect'%
-                            (len(self.config.masters),len(self.config.slaves),
+        self.add_line('// %d main, %d subordinate %s wishbone interconnect'%
+                            (len(self.config.mains),len(self.config.subordinates),
                              "shared bus"))
         self.add_line('//')
         self.add_line('// ADDRESS MAP')
-        for slave in self.config.slaves:
+        for subordinate in self.config.subordinates:
             self.add_line("// %8s: 0x%X - 0x%X"%
-                          (slave.name,slave.base,slave.base + slave.size - 1))
+                          (subordinate.name,subordinate.base,subordinate.base + subordinate.size - 1))
             
-    def add_master_port(self, master):
-        self.add_line("//Master port '%s':"%master.name)
+    def add_main_port(self, main):
+        self.add_line("//Main port '%s':"%main.name)
         self.add_line('input wire [%d:0] %s_adr_i,'%
-                      (master.address_width-1,master.name))
+                      (main.address_width-1,main.name))
         self.add_line('output reg [%d:0] %s_dat_o,'%
-                      (self.config.settings.data_width-1,master.name))
+                      (self.config.settings.data_width-1,main.name))
         self.add_line('input wire  [%d:0] %s_dat_i,'%
-                      (self.config.settings.data_width-1,master.name))
+                      (self.config.settings.data_width-1,main.name))
         self.add_line('input wire        %s_cyc_i,'%
-                      (master.name))
+                      (main.name))
         self.add_line('input wire        %s_stb_i,'%
-                      (master.name))
+                      (main.name))
         self.add_line('input wire        %s_we_i,'%
-                      (master.name))
+                      (main.name))
         self.add_line('output reg       %s_ack_o,'%
-                      (master.name))
-        if(master.include_address_valid):
-            self.add_line('output wire       %s_adrv_o,'%(master.name))
+                      (main.name))
+        if(main.include_address_valid):
+            self.add_line('output wire       %s_adrv_o,'%(main.name))
             
-    def add_slave_port(self, slave):
-        self.add_line("//Slave port '%s':"%slave.name)
+    def add_subordinate_port(self, subordinate):
+        self.add_line("//Subordinate port '%s':"%subordinate.name)
         self.add_line('output wire [%d:0] %s_adr_o,'%
-                      (slave.address_width-1,slave.name))
+                      (subordinate.address_width-1,subordinate.name))
         self.add_line('output wire [%d:0] %s_dat_o,'%
-                      (self.config.settings.data_width-1,slave.name))
+                      (self.config.settings.data_width-1,subordinate.name))
         self.add_line('input wire  [%d:0] %s_dat_i,'%
-                      (self.config.settings.data_width-1,slave.name))
+                      (self.config.settings.data_width-1,subordinate.name))
         self.add_line('output wire       %s_cyc_o,'%
-                      (slave.name))
+                      (subordinate.name))
         self.add_line('output wire       %s_stb_o,'%
-                      (slave.name))
+                      (subordinate.name))
         self.add_line('output wire       %s_we_o,'%
-                      (slave.name))
+                      (subordinate.name))
         self.add_line('input wire        %s_ack_i,'%
-                      (slave.name))
+                      (subordinate.name))
     def add_wire_throughs(self):
-        master = self.config.masters[0]
-        for slave in self.config.slaves:
+        main = self.config.mains[0]
+        for subordinate in self.config.subordinates:
             self.add_line('assign %s_adr_o = %s_adr_i[%s:0];'%
-                          (slave.name,master.name,slave.address_width-1))
+                          (subordinate.name,main.name,subordinate.address_width-1))
             self.add_line('assign %s_we_o = %s_we_i;'%
-                          (slave.name,master.name))
+                          (subordinate.name,main.name))
             self.add_line('assign %s_dat_o = %s_dat_i;'%
-                          (slave.name,master.name))
+                          (subordinate.name,main.name))
     
     def add_addr_decode(self):
-        master = self.config.masters[0]
-        ssel_width = clog2(len(self.config.slaves)+1)
+        main = self.config.mains[0]
+        ssel_width = clog2(len(self.config.subordinates)+1)
         self.add_line('reg [%d:0] s_sel;'%(ssel_width - 1))
         self.add_line('always @*')
         self.ts += 1
         count = 1;
-        for slave in self.config.slaves:
+        for subordinate in self.config.subordinates:
             self.add_line("if( %s_adr_i[%d:%d] == %d'd%d)"%
-                (master.name,master.address_width-1,slave.address_width, 
-                 master.address_width - slave.address_width, 
-                 slave.base >> (slave.address_width )))
+                (main.name,main.address_width-1,subordinate.address_width, 
+                 main.address_width - subordinate.address_width, 
+                 subordinate.base >> (subordinate.address_width )))
             self.ts += 1
             self.add_line("s_sel = %d'd%d;"%(ssel_width,count))
             self.ts -= 1
@@ -303,53 +303,53 @@ class wb_builder(object):
         self.ts -= 1
         
     def add_m2s_muxes(self):
-        master = self.config.masters[0]
-        ssel_width = clog2(len(self.config.slaves)+1)
+        main = self.config.mains[0]
+        ssel_width = clog2(len(self.config.subordinates)+1)
         count = 1
-        for slave in self.config.slaves:
+        for subordinate in self.config.subordinates:
             self.add_line("assign %s_stb_o = (s_sel==%d'd%d)? %s_stb_i : 1'b0;"%
-                          (slave.name,ssel_width,count,master.name))
+                          (subordinate.name,ssel_width,count,main.name))
             self.add_line("assign %s_cyc_o = (s_sel==%d'd%d)? %s_cyc_i : 1'b0;"%
-                          (slave.name,ssel_width,count,master.name))
+                          (subordinate.name,ssel_width,count,main.name))
             count +=1 
             
     def add_s2m_muxes(self):
-        master = self.config.masters[0]
-        ssel_width = clog2(len(self.config.slaves)+1)
+        main = self.config.mains[0]
+        ssel_width = clog2(len(self.config.subordinates)+1)
         count = 1
         self.add_line("always @*")
         self.ts += 1
         self.add_line("case(s_sel) /* synthesis parallel_case */")
         self.ts += 1
-        for slave in self.config.slaves:
+        for subordinate in self.config.subordinates:
             self.add_line("%d'd%d: begin"%(ssel_width,count))
             self.ts += 1 
-            self.add_line("%s_dat_o = %s_dat_i;"%(master.name, slave.name))
-            self.add_line("%s_ack_o = %s_ack_i;"%(master.name, slave.name))
+            self.add_line("%s_dat_o = %s_dat_i;"%(main.name, subordinate.name))
+            self.add_line("%s_ack_o = %s_ack_i;"%(main.name, subordinate.name))
             self.ts -= 1
             self.add_line("end")
             count += 1
        
         self.add_line("default: begin")
         self.ts += 1 
-        self.add_line("%s_dat_o = 0;"%(master.name))
-        self.add_line("%s_ack_o = 0;"%(master.name))
+        self.add_line("%s_dat_o = 0;"%(main.name))
+        self.add_line("%s_ack_o = 0;"%(main.name))
         self.ts -= 1
         self.add_line("end")
         self.ts -= 1
         self.add_line("endcase")
         self.ts -= 1
-        self.add_line("assign %s_adrv_o = s_sel != 0;"%master.name)
+        self.add_line("assign %s_adrv_o = s_sel != 0;"%main.name)
         
             
             
     def build_module_decl(self):
         self.add_line('module %s('%self.config.name)
         self.ts += 5
-        for master in self.config.masters:
-            self.add_master_port(master)
-        for slave in self.config.slaves:
-            self.add_slave_port(slave)
+        for main in self.config.mains:
+            self.add_main_port(main)
+        for subordinate in self.config.subordinates:
+            self.add_subordinate_port(subordinate)
         self.add_line('//Syscon connections')
         self.add_line('input wire clk_i,')
         self.add_line('input wire rst_i')
